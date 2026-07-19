@@ -1,0 +1,9 @@
+VERSION A — "Hard cel" (readable text, balanced graphic look)
+Run: bash presets/comicify_A_hardcel.sh   (same flags as comicify.sh)
+Rendered sample: output/versionA_hard.mp4
+
+Parameters:
+  STEP=75  COLOR_STEP=64
+  FLATTEN=20  FLATTEN_PASSES=2   (bilateral, edge-preserving)
+  SATURATION=2.8  CONTRAST=1.4
+  EDGES=true  LINE_THICKEN=2  EDGE_OPACITY=1.0  EDGE_LOW=0.1  EDGE_HIGH=0.4

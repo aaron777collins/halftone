@@ -1,0 +1,36 @@
+# ---- Personal / media / derived files — NEVER commit ----
+# Video
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.webm
+*.gif
+# Images
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.heic
+*.heif
+*.bmp
+*.tif
+*.tiff
+# Working directories with media
+input/
+output/
+frames/
+
+# The original tuner contains an embedded personal photo — never publish it
+comic-tuner.html
+
+# Scratch / intermediate artifacts
+default_frame.jpg
+frame_b64.txt
+scratch_check.js
+*.b64
+*.tmp
+scratch*
+tmp/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,655 @@
+<title>Halftone — Comic Stylization Tuner</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root{
+    --bg:#101216; --panel:#171a20; --panel-2:#1e222b; --line:#2a2f3a;
+    --text:#e8ebf0; --muted:#8b93a2; --muted-2:#5f6675;
+    --ink:#ED1C24;            /* classic comic red */
+    --ink-soft:#ff5a52;
+    --accent-2:#ffd400;       /* pop yellow, used sparingly for values */
+    --good:#3ecf8e;
+    --radius:10px;
+    --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--text); font-family:var(--sans);
+    font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
+  }
+  .app{display:flex;flex-direction:column;height:100vh;min-height:0}
+
+  /* ---------- header ---------- */
+  header{
+    display:flex;align-items:center;gap:16px;
+    padding:14px 20px;border-bottom:1px solid var(--line);
+    background:
+      radial-gradient(circle at 1px 1px, rgba(237,28,36,.22) 1px, transparent 1.4px) 0 0/9px 9px,
+      linear-gradient(180deg,#181b22,#141720);
+    background-blend-mode:normal;
+  }
+  .brand{display:flex;align-items:baseline;gap:12px;flex:1;min-width:0}
+  .logo{
+    font-family:var(--sans);font-weight:900;letter-spacing:.14em;
+    font-size:20px;text-transform:uppercase;
+    color:var(--text);
+    text-shadow:2px 2px 0 var(--ink);
+    white-space:nowrap;
+  }
+  .logo b{color:var(--ink);text-shadow:2px 2px 0 rgba(0,0,0,.35)}
+  .tagline{color:var(--muted);font-size:12.5px;letter-spacing:.02em;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hbtns{display:flex;gap:8px}
+
+  /* ---------- scripture ribbon ---------- */
+  .verse-ribbon{
+    display:flex;align-items:center;gap:12px;
+    padding:8px 20px;border-bottom:1px solid var(--line);
+    background:
+      radial-gradient(circle at 1px 1px, rgba(237,28,36,.14) 1px, transparent 1.4px) 0 0/9px 9px,
+      linear-gradient(180deg,#14161d,#111319);
+    font-size:12.5px;min-height:34px;
+  }
+  .verse-dot{
+    width:9px;height:9px;border-radius:50%;flex:none;
+    background:var(--ink);box-shadow:0 0 0 3px rgba(237,28,36,.18);
+  }
+  .verse-body{
+    flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    transition:opacity .6s ease;
+  }
+  .verse-body.fade{opacity:0}
+  .verse-text{color:var(--text);font-style:italic}
+  .verse-ref{color:var(--ink-soft);font-weight:700;margin-left:8px;font-style:normal}
+  .verse-web{
+    flex:none;color:var(--muted-2);font-size:10px;font-weight:700;letter-spacing:.08em;
+    border:1px solid var(--line);border-radius:5px;padding:2px 6px;
+  }
+  @media (prefers-reduced-motion: reduce){ .verse-body{transition:none} }
+
+  button, .filelabel{
+    font-family:var(--sans);font-size:12.5px;font-weight:600;
+    color:var(--text);background:var(--panel-2);border:1px solid var(--line);
+    padding:8px 12px;border-radius:8px;cursor:pointer;white-space:nowrap;
+    transition:border-color .12s, background .12s, transform .04s;
+  }
+  button:hover,.filelabel:hover{border-color:#3c4353;background:#232833}
+  button:active{transform:translateY(1px)}
+  button:focus-visible,.filelabel:focus-within{outline:2px solid var(--ink-soft);outline-offset:2px}
+  button.primary{background:var(--ink);border-color:var(--ink);color:#fff}
+  button.primary:hover{background:#ff2d34;border-color:#ff2d34}
+  button.ghost{background:transparent}
+  .filelabel input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+
+  /* ---------- main split ---------- */
+  main{display:flex;flex:1;min-height:0}
+  .stage{
+    flex:1;min-width:0;display:flex;flex-direction:column;
+    background:
+      repeating-conic-gradient(#15171d 0% 25%, #12141a 0% 50%) 0 0/26px 26px;
+    position:relative;
+  }
+  .stage-toolbar{
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    padding:10px 14px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(23,26,32,.9),rgba(23,26,32,.7));
+    backdrop-filter:blur(4px);
+  }
+  .stage-toolbar .spacer{flex:1}
+  .badge{font-size:11.5px;color:var(--muted);font-family:var(--mono)}
+  .canvas-wrap{flex:1;min-height:0;display:grid;place-items:center;padding:18px;overflow:hidden}
+  canvas{
+    max-width:100%;max-height:100%;border-radius:var(--radius);
+    box-shadow:0 10px 40px rgba(0,0,0,.5), 0 0 0 1px var(--line);
+    display:block;image-rendering:auto;
+  }
+  .hint{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);
+    font-size:12px;color:var(--muted);background:rgba(16,18,22,.8);
+    border:1px solid var(--line);padding:6px 12px;border-radius:20px;pointer-events:none}
+
+  /* ---------- control rail ---------- */
+  .rail{
+    width:340px;flex:none;display:flex;flex-direction:column;min-height:0;
+    border-left:1px solid var(--line);background:var(--panel);
+  }
+  .rail-scroll{overflow-y:auto;padding:6px 0 10px;flex:1;min-height:0}
+  .group{padding:14px 18px 4px}
+  .group + .group{border-top:1px solid var(--line)}
+  .group h3{
+    margin:0 0 12px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--muted);font-weight:700;display:flex;align-items:center;gap:8px;
+  }
+  .group h3::before{content:"";width:14px;height:2px;background:var(--ink);border-radius:2px}
+
+  .ctrl{margin-bottom:14px}
+  .ctrl-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+  .ctrl-head label{font-size:13px;color:var(--text)}
+  .ctrl-head .val{font-family:var(--mono);font-size:12.5px;color:var(--accent-2);
+    font-variant-numeric:tabular-nums;background:rgba(255,212,0,.08);
+    padding:1px 7px;border-radius:5px;min-width:44px;text-align:right}
+  .ctrl-sub{font-size:11.5px;color:var(--muted-2);margin:-3px 0 8px}
+
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:4px;
+    background:var(--panel-2);border-radius:3px;outline:none;cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+    background:var(--text);border:3px solid var(--ink);cursor:grab;
+    box-shadow:0 1px 4px rgba(0,0,0,.5);margin-top:0;
+  }
+  input[type=range]:active::-webkit-slider-thumb{cursor:grabbing;background:var(--ink-soft)}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;
+    background:var(--text);border:3px solid var(--ink);cursor:grab}
+  input[type=range]:focus-visible{box-shadow:0 0 0 2px var(--ink-soft)}
+  input[type=range]:disabled{opacity:.4;cursor:not-allowed}
+
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+  .switch{position:relative;width:42px;height:24px;flex:none}
+  .switch input{opacity:0;width:0;height:0;position:absolute}
+  .slider-bg{position:absolute;inset:0;background:var(--panel-2);border:1px solid var(--line);
+    border-radius:20px;transition:.15s}
+  .slider-bg::before{content:"";position:absolute;width:16px;height:16px;left:3px;top:3px;
+    background:var(--muted);border-radius:50%;transition:.15s}
+  .switch input:checked + .slider-bg{background:rgba(237,28,36,.25);border-color:var(--ink)}
+  .switch input:checked + .slider-bg::before{transform:translateX(18px);background:var(--ink)}
+  .switch input:focus-visible + .slider-bg{outline:2px solid var(--ink-soft);outline-offset:2px}
+
+  /* ---------- command dock ---------- */
+  .dock{border-top:1px solid var(--line);background:var(--panel-2);padding:12px 14px}
+  .dock-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .dock-head .t{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .dock-head .btns{display:flex;gap:6px}
+  .dock-head button{padding:5px 10px;font-size:11.5px}
+  pre.cmd{
+    margin:0;font-family:var(--mono);font-size:11px;line-height:1.55;color:#cbd3e1;
+    background:#0d0f13;border:1px solid var(--line);border-radius:8px;
+    padding:10px 12px;max-height:150px;overflow:auto;white-space:pre;
+  }
+  pre.cmd .flt{color:var(--ink-soft)}
+  pre.cmd .num{color:var(--accent-2)}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--good);color:#06281a;font-weight:700;padding:9px 18px;border-radius:8px;
+    opacity:0;pointer-events:none;transition:.2s;font-size:13px;z-index:50}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  @media (max-width:860px){
+    main{flex-direction:column}
+    .rail{width:auto;border-left:none;border-top:1px solid var(--line);max-height:52vh}
+  }
+</style>
+
+<div class="app">
+  <header>
+    <div class="brand">
+      <div class="logo">HALF<b>TONE</b></div>
+      <div class="tagline">live comic-stylization tuner &middot; drag sliders, copy the ffmpeg command</div>
+    </div>
+    <div class="hbtns">
+      <label class="filelabel" tabindex="0">Load image / video
+        <input id="file" type="file" accept="image/*,video/*" />
+      </label>
+      <button id="reset" class="ghost" type="button">Reset</button>
+    </div>
+  </header>
+
+  <div class="verse-ribbon" role="complementary" aria-label="Rotating scripture verse">
+    <span class="verse-dot" aria-hidden="true"></span>
+    <span class="verse-body">
+      <span class="verse-text" id="verse_text"></span>
+      <span class="verse-ref" id="verse_ref"></span>
+    </span>
+    <span class="verse-web" title="World English Bible (public domain)">WEB</span>
+  </div>
+
+  <main>
+    <section class="stage">
+      <div class="stage-toolbar">
+        <button id="hold" type="button" title="Hold to see the untouched frame">Hold: original</button>
+        <button id="playpause" type="button" style="display:none">Pause</button>
+        <span class="spacer"></span>
+        <span class="badge" id="dims">—</span>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="gl"></canvas>
+      </div>
+      <div class="hint" id="hint">Showing a procedurally-drawn demo scene — load your own image or video above (it stays in your browser)</div>
+    </section>
+
+    <aside class="rail">
+      <div class="rail-scroll">
+
+        <div class="group">
+          <h3>Color</h3>
+          <div class="ctrl">
+            <div class="ctrl-head"><label for="sat">Saturation</label><span class="val" id="sat_v">2.60</span></div>
+            <input type="range" id="sat" min="0.5" max="3.5" step="0.05" value="2.6">
+          </div>
+          <div class="ctrl">
+            <div class="ctrl-head"><label for="con">Contrast</label><span class="val" id="con_v">1.35</span></div>
+            <input type="range" id="con" min="0.8" max="2.0" step="0.05" value="1.35">
+          </div>
+        </div>
+
+        <div class="group">
+          <h3>Flatten</h3>
+          <div class="ctrl-sub">Fills regions with flat color while keeping edges sharp — this is what makes it graphic, not blurry.</div>
+          <div class="ctrl">
+            <div class="ctrl-head"><label for="rad">Strength</label><span class="val" id="rad_v">4</span></div>
+            <input type="range" id="rad" min="0" max="6" step="1" value="4">
+          </div>
+          <div class="ctrl">
+            <div class="ctrl-head"><label for="pass">Passes</label><span class="val" id="pass_v">2</span></div>
+            <input type="range" id="pass" min="0" max="3" step="1" value="2">
+          </div>
+        </div>
+
+        <div class="group">
+          <h3>Posterize</h3>
+          <div class="ctrl-sub">Fewer levels = chunkier, more pop-art color blocks.</div>
+          <div class="ctrl">
+            <div class="ctrl-head"><label for="lev">Color levels</label><span class="val" id="lev_v">5</span></div>
+            <input type="range" id="lev" min="2" max="12" step="1" value="5">
+          </div>
+        </div>
+
+        <div class="group">
+          <h3>Ink lines</h3>
+          <div class="toggle-row">
+            <label for="edges" style="font-size:13px">Draw outlines</label>
+            <span class="switch"><input type="checkbox" id="edges" checked><span class="slider-bg"></span></span>
+          </div>
+          <div class="ctrl">
+            <div class="ctrl-head"><label for="thr">Threshold</label><span class="val" id="thr_v">0.28</span></div>
+            <div class="ctrl-sub" style="margin-top:2px">Higher = fewer, cleaner lines</div>
+            <input type="range" id="thr" min="0.05" max="0.8" step="0.01" value="0.28">
+          </div>
+          <div class="ctrl">
+            <div class="ctrl-head"><label for="thick">Thickness</label><span class="val" id="thick_v">1</span></div>
+            <input type="range" id="thick" min="0" max="3" step="1" value="1">
+          </div>
+          <div class="ctrl">
+            <div class="ctrl-head"><label for="op">Darkness</label><span class="val" id="op_v">0.90</span></div>
+            <input type="range" id="op" min="0" max="1" step="0.05" value="0.9">
+          </div>
+        </div>
+
+        <div class="group">
+          <h3>Output</h3>
+          <div class="toggle-row">
+            <label for="ss" style="font-size:13px">Clean edges (2&times; supersample)</label>
+            <span class="switch"><input type="checkbox" id="ss" checked><span class="slider-bg"></span></span>
+          </div>
+          <div class="ctrl-sub">Renders at double size and scales down for anti-aliased, non-jaggy ink lines. Slower but cleaner.</div>
+        </div>
+
+      </div>
+
+      <div class="dock">
+        <div class="dock-head">
+          <span class="t">ffmpeg command</span>
+          <div class="btns">
+            <button id="copy" class="primary" type="button">Copy</button>
+            <button id="copybatch" type="button" title="Loop over input/*.mp4">Copy batch</button>
+          </div>
+        </div>
+        <pre class="cmd" id="cmd"></pre>
+      </div>
+    </aside>
+  </main>
+</div>
+<div class="toast" id="toast">Copied</div>
+
+<script>
+const DEFAULT_FRAME = null;
+
+const $ = id => document.getElementById(id);
+const canvas = $('gl');
+const gl = canvas.getContext('webgl', {preserveDrawingBuffer:true, premultipliedAlpha:false});
+if(!gl){ $('hint').textContent = 'WebGL is not available in this browser.'; }
+
+/* ---------------- shaders ---------------- */
+const VS = `
+attribute vec2 a_pos; varying vec2 v_uv;
+uniform float u_flip;
+void main(){ v_uv = vec2(a_pos.x*0.5+0.5, (a_pos.y*u_flip)*0.5+0.5);
+  gl_Position = vec4(a_pos,0.0,1.0); }`;
+
+const FS_EQ = `precision highp float; varying vec2 v_uv;
+uniform sampler2D u_tex; uniform float u_sat,u_con;
+void main(){ vec3 c=texture2D(u_tex,v_uv).rgb;
+  c=(c-0.5)*u_con+0.5;
+  float l=dot(c,vec3(0.299,0.587,0.114));
+  c=mix(vec3(l),c,u_sat);
+  gl_FragColor=vec4(clamp(c,0.0,1.0),1.0); }`;
+
+const FS_BIL = `precision highp float; varying vec2 v_uv;
+uniform sampler2D u_tex; uniform vec2 u_texel; uniform int u_R; uniform float u_sigR;
+void main(){
+  vec3 ctr=texture2D(u_tex,v_uv).rgb;
+  float sigS=max(float(u_R)*0.6,0.6);
+  vec3 sum=vec3(0.0); float wsum=0.0;
+  for(int dy=-6;dy<=6;dy++){ for(int dx=-6;dx<=6;dx++){
+    if(dx< -u_R||dx>u_R||dy< -u_R||dy>u_R) continue;
+    vec2 off=vec2(float(dx),float(dy))*u_texel;
+    vec3 s=texture2D(u_tex,v_uv+off).rgb;
+    float ds=float(dx*dx+dy*dy);
+    float ws=exp(-ds/(2.0*sigS*sigS));
+    vec3 d=s-ctr; float dr=dot(d,d);
+    float wr=exp(-dr/(2.0*u_sigR*u_sigR));
+    float w=ws*wr; sum+=s*w; wsum+=w;
+  }}
+  gl_FragColor=vec4(sum/max(wsum,1e-4),1.0); }`;
+
+const FS_COMP = `precision highp float; varying vec2 v_uv;
+uniform sampler2D u_tex; uniform vec2 u_texel;
+uniform float u_levels; uniform bool u_edges; uniform float u_thr; uniform int u_thick; uniform float u_op;
+float luma(vec3 c){ return dot(c,vec3(0.299,0.587,0.114)); }
+float sob(vec2 uv){
+  float tl=luma(texture2D(u_tex,uv+u_texel*vec2(-1.0,-1.0)).rgb);
+  float tc=luma(texture2D(u_tex,uv+u_texel*vec2( 0.0,-1.0)).rgb);
+  float tr=luma(texture2D(u_tex,uv+u_texel*vec2( 1.0,-1.0)).rgb);
+  float ml=luma(texture2D(u_tex,uv+u_texel*vec2(-1.0, 0.0)).rgb);
+  float mr=luma(texture2D(u_tex,uv+u_texel*vec2( 1.0, 0.0)).rgb);
+  float bl=luma(texture2D(u_tex,uv+u_texel*vec2(-1.0, 1.0)).rgb);
+  float bc=luma(texture2D(u_tex,uv+u_texel*vec2( 0.0, 1.0)).rgb);
+  float br=luma(texture2D(u_tex,uv+u_texel*vec2( 1.0, 1.0)).rgb);
+  float gx=-tl-2.0*ml-bl+tr+2.0*mr+br;
+  float gy=-tl-2.0*tc-tr+bl+2.0*bc+br;
+  return length(vec2(gx,gy)); }
+void main(){
+  vec3 c=texture2D(u_tex,v_uv).rgb;
+  // Posterize in YUV so hues stay coherent (RGB-independent posterize invents
+  // false colors). Luma quantized to L levels; chroma rounded (centered at 0)
+  // so neutral grays don't drift into a color cast.
+  float L=max(u_levels,2.0);
+  float Y=dot(c,vec3(0.299,0.587,0.114));
+  float Cb=c.b-Y, Cr=c.r-Y;
+  Y=floor(min(Y,0.99999)*L)/(L-1.0);
+  float step=1.0/L;
+  Cb=floor(Cb/step+0.5)*step;
+  Cr=floor(Cr/step+0.5)*step;
+  c=vec3(Y+Cr, Y-0.5094*Cr-0.1942*Cb, Y+Cb);
+  c=clamp(c,0.0,1.0);
+  if(u_edges){
+    float e=0.0;
+    for(int dy=-3;dy<=3;dy++){ for(int dx=-3;dx<=3;dx++){
+      if(dx< -u_thick||dx>u_thick||dy< -u_thick||dy>u_thick) continue;
+      e=max(e,sob(v_uv+vec2(float(dx),float(dy))*u_texel));
+    }}
+    float line=smoothstep(u_thr,u_thr+0.06,e);
+    c=mix(c,vec3(0.0),line*u_op);
+  }
+  gl_FragColor=vec4(c,1.0); }`;
+
+const FS_COPY = `precision highp float; varying vec2 v_uv;
+uniform sampler2D u_tex; void main(){ gl_FragColor=texture2D(u_tex,v_uv); }`;
+
+function compile(type,src){ const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; }
+function program(fs){ const p=gl.createProgram();
+  gl.attachShader(p,compile(gl.VERTEX_SHADER,VS)); gl.attachShader(p,compile(gl.FRAGMENT_SHADER,fs));
+  gl.bindAttribLocation(p,0,'a_pos'); gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p)); return p; }
+
+let P={};
+if(gl){
+  P.eq=program(FS_EQ); P.bil=program(FS_BIL); P.comp=program(FS_COMP); P.copy=program(FS_COPY);
+  const buf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1, 1,-1, -1,1, 1,1]),gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+}
+
+/* ---------------- textures / fbos ---------------- */
+let PW=0,PH=0, srcTex=null, fboA=null, fboB=null;
+function makeTex(w,h){ const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE); return t; }
+function makeFbo(w,h){ const tex=makeTex(w,h); const fb=gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER,fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tex,0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null); return {fb,tex}; }
+
+function resize(w,h){
+  const MAXW=1100; let s=Math.min(1,MAXW/w); PW=Math.round(w*s); PH=Math.round(h*s);
+  canvas.width=PW; canvas.height=PH;
+  srcTex=makeTex(PW,PH); fboA=makeFbo(PW,PH); fboB=makeFbo(PW,PH);
+  $('dims').textContent=w+'×'+h+'  →  '+PW+'×'+PH+' preview';
+}
+
+/* ---------------- source (image or video) ---------------- */
+let source=null, isVideo=false, videoEl=null, rafId=0;
+function loadImage(url){
+  const img=new Image(); img.onload=()=>{ stopVideo(); source=img; isVideo=false;
+    resize(img.naturalWidth,img.naturalHeight); uploadSource(img); renderOnce();
+    $('playpause').style.display='none';
+  }; img.onerror=()=>{ $('hint').textContent='Could not load that image.'; }; img.src=url;
+}
+function loadVideo(url){
+  stopVideo(); videoEl=document.createElement('video'); videoEl.src=url;
+  videoEl.crossOrigin='anonymous'; videoEl.loop=true; videoEl.muted=true; videoEl.playsInline=true;
+  videoEl.addEventListener('loadeddata',()=>{ source=videoEl; isVideo=true;
+    resize(videoEl.videoWidth,videoEl.videoHeight);
+    $('playpause').style.display=''; $('playpause').textContent='Pause';
+    videoEl.play(); loop();
+    $('hint').textContent='Playing your clip — stylized live';
+  },{once:true});
+  videoEl.addEventListener('error',()=>{ $('hint').textContent='Could not decode that video in-browser (try an MP4/H.264).'; });
+}
+function stopVideo(){ if(rafId){cancelAnimationFrame(rafId);rafId=0;} if(videoEl){videoEl.pause();} isVideo=false; }
+/* Procedurally drawn NEUTRAL demo scene (no photo, no personal imagery).
+   A warm sunset gradient sky, a water band, a tree-line silhouette, a dock and sun. */
+function makePlaceholder(){
+  const W=960,H=540; const c=document.createElement('canvas'); c.width=W; c.height=H;
+  const x=c.getContext('2d');
+  // sky gradient (warm sunset)
+  let sky=x.createLinearGradient(0,0,0,H*0.62);
+  sky.addColorStop(0,'#2b3a67'); sky.addColorStop(0.45,'#8a5a7a');
+  sky.addColorStop(0.75,'#e0774f'); sky.addColorStop(1,'#f6b26b');
+  x.fillStyle=sky; x.fillRect(0,0,W,H*0.62);
+  // sun
+  x.fillStyle='#ffd98a'; x.beginPath(); x.arc(W*0.72,H*0.34,46,0,Math.PI*2); x.fill();
+  x.globalAlpha=0.25; x.fillStyle='#fff3d0'; x.beginPath(); x.arc(W*0.72,H*0.34,72,0,Math.PI*2); x.fill();
+  x.globalAlpha=1;
+  // water band
+  let wat=x.createLinearGradient(0,H*0.62,0,H);
+  wat.addColorStop(0,'#c56a4a'); wat.addColorStop(0.25,'#7a5570'); wat.addColorStop(1,'#243050');
+  x.fillStyle=wat; x.fillRect(0,H*0.62,W,H*0.38);
+  // sun reflection on water
+  x.globalAlpha=0.35; x.fillStyle='#ffd98a';
+  x.fillRect(W*0.72-26,H*0.62,52,H*0.38); x.globalAlpha=1;
+  // tree-line silhouette (overlapping circles + triangles)
+  x.fillStyle='#101a1e';
+  const base=H*0.60;
+  for(let i=-1;i<=20;i++){ const cx=i*52+((i%2)?18:0); const r=26+((i*37)%18);
+    x.beginPath(); x.arc(cx,base,r,0,Math.PI*2); x.fill(); }
+  for(let i=0;i<=9;i++){ const tx=i*110+30; const th=44+((i*53)%40);
+    x.beginPath(); x.moveTo(tx-24,base); x.lineTo(tx,base-th); x.lineTo(tx+24,base); x.closePath(); x.fill(); }
+  x.fillRect(0,base,W,H-base);
+  // dock: a rounded rectangle reaching into the water
+  x.fillStyle='#3a2a22';
+  const dx=W*0.30, dy=H*0.70, dw=W*0.40, dh=22, rr=8;
+  x.beginPath();
+  x.moveTo(dx+rr,dy); x.arcTo(dx+dw,dy,dx+dw,dy+dh,rr); x.arcTo(dx+dw,dy+dh,dx,dy+dh,rr);
+  x.arcTo(dx,dy+dh,dx,dy,rr); x.arcTo(dx,dy,dx+dw,dy,rr); x.closePath(); x.fill();
+  // a couple of dock posts
+  x.fillStyle='#2a1e18'; x.fillRect(dx+8,dy+dh,10,46); x.fillRect(dx+dw-18,dy+dh,10,46);
+  return c.toDataURL('image/png');
+}
+function uploadSource(el){ gl.bindTexture(gl.TEXTURE_2D,srcTex);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,el); }
+
+/* ---------------- draw ---------------- */
+function drawQuad(){ gl.drawArrays(gl.TRIANGLE_STRIP,0,4); }
+function useTex(prog,tex,unit){ gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,tex);
+  gl.uniform1i(gl.getUniformLocation(prog,'u_tex'),unit); }
+
+function pipeline(){
+  if(!gl||!source) return;
+  const v=vals();
+  if(isVideo && source.readyState>=2) uploadSource(source);
+  gl.viewport(0,0,PW,PH);
+  const texel=[1/PW,1/PH];
+
+  // pass 1: eq -> fboA
+  gl.useProgram(P.eq); gl.uniform1f(gl.getUniformLocation(P.eq,'u_flip'),1);
+  useTex(P.eq,srcTex,0);
+  gl.uniform1f(gl.getUniformLocation(P.eq,'u_sat'),v.sat);
+  gl.uniform1f(gl.getUniformLocation(P.eq,'u_con'),v.con);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,fboA.fb); drawQuad();
+
+  // bilateral ping-pong
+  let cur=fboA, other=fboB;
+  const passes=(v.rad>0)?v.pass:0;
+  for(let i=0;i<passes;i++){
+    gl.useProgram(P.bil); gl.uniform1f(gl.getUniformLocation(P.bil,'u_flip'),1);
+    useTex(P.bil,cur.tex,0);
+    gl.uniform2f(gl.getUniformLocation(P.bil,'u_texel'),texel[0],texel[1]);
+    gl.uniform1i(gl.getUniformLocation(P.bil,'u_R'),v.rad);
+    gl.uniform1f(gl.getUniformLocation(P.bil,'u_sigR'),0.14);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,other.fb); drawQuad();
+    const t=cur;cur=other;other=t;
+  }
+
+  // composite -> screen (flip Y: screen origin is top-left, GL texture is bottom-left)
+  gl.useProgram(P.comp); gl.uniform1f(gl.getUniformLocation(P.comp,'u_flip'),-1);
+  useTex(P.comp,cur.tex,0);
+  gl.uniform2f(gl.getUniformLocation(P.comp,'u_texel'),texel[0],texel[1]);
+  gl.uniform1f(gl.getUniformLocation(P.comp,'u_levels'),v.lev);
+  gl.uniform1i(gl.getUniformLocation(P.comp,'u_edges'),v.edges?1:0);
+  gl.uniform1f(gl.getUniformLocation(P.comp,'u_thr'),v.thr*4.0); // scale sobel range
+  gl.uniform1i(gl.getUniformLocation(P.comp,'u_thick'),v.thick);
+  gl.uniform1f(gl.getUniformLocation(P.comp,'u_op'),v.op);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null); drawQuad();
+}
+function drawOriginal(){ if(!gl||!source) return;
+  if(isVideo && source.readyState>=2) uploadSource(source);
+  gl.viewport(0,0,PW,PH); gl.useProgram(P.copy);
+  gl.uniform1f(gl.getUniformLocation(P.copy,'u_flip'),-1);
+  useTex(P.copy,srcTex,0); gl.bindFramebuffer(gl.FRAMEBUFFER,null); drawQuad(); }
+
+let holding=false;
+function renderOnce(){ holding?drawOriginal():pipeline(); }
+function loop(){ renderOnce(); rafId=requestAnimationFrame(loop); }
+
+/* ---------------- controls ---------------- */
+const ids=['sat','con','rad','pass','lev','thr','thick','op','edges','ss'];
+function vals(){ return {
+  sat:+$('sat').value, con:+$('con').value, rad:+$('rad').value, pass:+$('pass').value,
+  lev:+$('lev').value, thr:+$('thr').value, thick:+$('thick').value, op:+$('op').value,
+  edges:$('edges').checked, ss:$('ss').checked }; }
+function fmt(id,d){ const el=$(id); const n=+el.value; $(id+'_v').textContent = d!=null? n.toFixed(d): n; }
+function syncLabels(){ fmt('sat',2); fmt('con',2); fmt('rad'); fmt('pass'); fmt('lev');
+  fmt('thr',2); fmt('thick'); fmt('op',2);
+  const on=$('edges').checked; ['thr','thick','op'].forEach(i=>$(i).disabled=!on);
+}
+function onChange(){ syncLabels(); buildCmd(); if(!isVideo) renderOnce(); }
+ids.forEach(id=>$(id).addEventListener('input',onChange));
+
+$('hold').addEventListener('mousedown',()=>{holding=true; if(!isVideo)renderOnce();});
+$('hold').addEventListener('mouseup',()=>{holding=false; if(!isVideo)renderOnce();});
+$('hold').addEventListener('mouseleave',()=>{holding=false; if(!isVideo)renderOnce();});
+$('hold').addEventListener('touchstart',e=>{e.preventDefault();holding=true;if(!isVideo)renderOnce();},{passive:false});
+$('hold').addEventListener('touchend',()=>{holding=false;if(!isVideo)renderOnce();});
+
+$('playpause').addEventListener('click',()=>{ if(!videoEl)return;
+  if(videoEl.paused){videoEl.play();$('playpause').textContent='Pause';}
+  else{videoEl.pause();$('playpause').textContent='Play';} });
+
+$('file').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f)return;
+  const url=URL.createObjectURL(f);
+  if(f.type.startsWith('video')) loadVideo(url); else loadImage(url);
+  $('hint').style.display='none';
+});
+
+const DEFAULTS={sat:2.6,con:1.35,rad:4,pass:2,lev:5,thr:0.28,thick:1,op:0.9,edges:true,ss:true};
+$('reset').addEventListener('click',()=>{
+  for(const k in DEFAULTS){ const el=$(k); if(el.type==='checkbox')el.checked=DEFAULTS[k]; else el.value=DEFAULTS[k]; }
+  onChange();
+});
+
+/* ---------------- ffmpeg command ---------------- */
+// YUV posterize: luma to L levels (floor), chroma centered-rounded so neutrals
+// don't cast. stepY = 256/L for luma; chroma quantized around 128.
+function posterFilter(L){
+  const sy=Math.max(2,Math.round(256/L));
+  const sc=Math.max(2,Math.round(256/L));
+  const y="floor(val/"+sy+")*"+sy;
+  const uv="round((val-128)/"+sc+")*"+sc+"+128";
+  return "lutyuv=y='"+y+"':u='"+uv+"':v='"+uv+"'";
+}
+function buildCmd(){
+  const v=vals();
+  const S=v.sat.toFixed(2), C=v.con.toFixed(2);
+  const sigmaS=v.rad*5;                          // slider strength -> bilateral sigmaS
+  const lo=(v.thr*0.5).toFixed(2), hi=Math.min(1,v.thr*1.1+0.05).toFixed(2);
+  const bil = (v.rad>0 && v.pass>0)
+      ? Array(v.pass).fill("bilateral=sigmaS="+sigmaS+":sigmaR=0.1").join(",")+"," : "";
+  const post = posterFilter(v.lev);
+  const upS = v.ss? "scale=iw*2:ih*2:flags=lanczos," : "";
+  const dnS = v.ss? ",scale=iw/2:ih/2:flags=lanczos" : "";
+  let vf, filt;
+  if(v.edges){
+    const ero = v.thick>0 ? ","+Array(v.thick).fill("erosion").join(",") : "";
+    filt =
+`-filter_complex "[0:v]${upS}eq=saturation=${S}:contrast=${C},${bil}split[f1][f2];`+
+`[f1]${post}[base];`+
+`[f2]edgedetect=low=${lo}:high=${hi},negate${ero},format=yuv420p[edges];`+
+`[base][edges]blend=all_mode=multiply:c0_opacity=${v.op.toFixed(2)}:c1_opacity=0:c2_opacity=0${dnS}[out]" -map "[out]" -map 0:a?`;
+  } else {
+    filt = `-vf "${upS}eq=saturation=${S}:contrast=${C},${bil}${post}${dnS}" -map 0:v -map 0:a?`;
+  }
+  const cmd = `ffmpeg -i input.mp4 ${filt} -c:v libx264 -crf 18 -preset medium -pix_fmt yuv420p -c:a copy output.mp4`;
+  window.__cmd=cmd;
+  window.__batch=`for f in input/*.mp4; do\n  ffmpeg -y -i "$f" ${filt} \\\n    -c:v libx264 -crf 18 -preset medium -pix_fmt yuv420p -c:a copy "output/$(basename "\${f%.*}")_comic.mp4"\ndone`;
+  // syntax tint
+  $('cmd').innerHTML = cmd
+    .replace(/(eq|bilateral|lutyuv|edgedetect|negate|erosion|blend|split|scale|format)/g,'<span class="flt">$1</span>')
+    .replace(/(\d+\.\d+|\b\d+\b)/g,'<span class="num">$&</span>');
+}
+
+/* ---------------- copy ---------------- */
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),1300); }
+function copy(text,msg){ navigator.clipboard.writeText(text).then(()=>toast(msg))
+  .catch(()=>{ const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy'); ta.remove(); toast(msg); }); }
+$('copy').addEventListener('click',()=>copy(window.__cmd,'Command copied'));
+$('copybatch').addEventListener('click',()=>copy(window.__batch,'Batch loop copied'));
+
+/* ---------------- scripture verses (World English Bible, public domain) ---------------- */
+const VERSES=[
+  {text:"Let there be light: and there was light.", ref:"Genesis 1:3"},
+  {text:"You are the light of the world. A city located on a hill can't be hidden.", ref:"Matthew 5:14"},
+  {text:"This is the day that Yahweh has made. We will rejoice and be glad in it!", ref:"Psalm 118:24"},
+  {text:"Every good gift and every perfect gift is from above.", ref:"James 1:17"},
+  {text:"For with God nothing will be impossible.", ref:"Luke 1:37"},
+  {text:"Let the little children come to me, and don't forbid them.", ref:"Matthew 19:14"},
+  {text:"Your word is a lamp to my feet, and a light for my path.", ref:"Psalm 119:105"},
+  {text:"The heavens declare the glory of God.", ref:"Psalm 19:1"}
+];
+(function rotateVerses(){
+  const body=document.querySelector('.verse-body');
+  const tEl=$('verse_text'), rEl=$('verse_ref');
+  if(!body||!tEl||!rEl) return;
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let i=Math.floor(Math.random()*VERSES.length);
+  function paint(){ tEl.textContent='“'+VERSES[i].text+'”'; rEl.textContent='— '+VERSES[i].ref; }
+  paint();
+  setInterval(()=>{
+    i=(i+1)%VERSES.length;
+    if(reduce){ paint(); return; }
+    body.classList.add('fade');
+    setTimeout(()=>{ paint(); body.classList.remove('fade'); }, 600);
+  }, 9000);
+})();
+
+/* ---------------- boot ---------------- */
+syncLabels(); buildCmd();
+if(gl) loadImage(DEFAULT_FRAME || makePlaceholder());
+</script>
