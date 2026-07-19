@@ -98,6 +98,15 @@
   }
   .stage-toolbar .spacer{flex:1}
   .badge{font-size:11.5px;color:var(--muted);font-family:var(--mono)}
+  .rec-ind{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;
+    letter-spacing:.12em;color:var(--ink-soft)}
+  .rec-dot{width:9px;height:9px;border-radius:50%;background:var(--ink);
+    animation:recblink 1s steps(2,start) infinite}
+  @keyframes recblink{50%{opacity:.25}}
+  @media (prefers-reduced-motion: reduce){ .rec-dot{animation:none} }
+  .export-note{padding:6px 14px;font-size:11px;color:var(--muted-2);
+    border-bottom:1px solid var(--line);background:rgba(20,22,29,.6)}
+  button:disabled{opacity:.45;cursor:not-allowed}
   .canvas-wrap{flex:1;min-height:0;display:grid;place-items:center;padding:18px;overflow:hidden}
   canvas{
     max-width:100%;max-height:100%;border-radius:var(--radius);
@@ -209,8 +218,13 @@
         <button id="hold" type="button" title="Hold to see the untouched frame">Hold: original</button>
         <button id="playpause" type="button" style="display:none">Pause</button>
         <span class="spacer"></span>
+        <span class="rec-ind" id="recind" hidden><span class="rec-dot"></span>REC</span>
+        <button id="exportPng" class="primary" type="button" title="Download the stylized still as a PNG">Download frame (PNG)</button>
+        <button id="exportWebm" type="button" style="display:none" title="Record the stylized canvas for one pass and download a WebM">Record &amp; download (WebM)</button>
+        <button id="stopRec" type="button" style="display:none" title="Stop recording and download">Stop</button>
         <span class="badge" id="dims">—</span>
       </div>
+      <div class="export-note" id="exportNote">WebM export is a quick in-browser copy — for final MP4 / Camtasia quality, use the ffmpeg command.</div>
       <div class="canvas-wrap">
         <canvas id="gl"></canvas>
       </div>
@@ -236,8 +250,8 @@
           <h3>Flatten</h3>
           <div class="ctrl-sub">Fills regions with flat color while keeping edges sharp — this is what makes it graphic, not blurry.</div>
           <div class="ctrl">
-            <div class="ctrl-head"><label for="rad">Strength</label><span class="val" id="rad_v">4</span></div>
-            <input type="range" id="rad" min="0" max="6" step="1" value="4">
+            <div class="ctrl-head"><label for="rad">Strength</label><span class="val" id="rad_v">6</span></div>
+            <input type="range" id="rad" min="0" max="6" step="1" value="6">
           </div>
           <div class="ctrl">
             <div class="ctrl-head"><label for="pass">Passes</label><span class="val" id="pass_v">2</span></div>
@@ -261,17 +275,17 @@
             <span class="switch"><input type="checkbox" id="edges" checked><span class="slider-bg"></span></span>
           </div>
           <div class="ctrl">
-            <div class="ctrl-head"><label for="thr">Threshold</label><span class="val" id="thr_v">0.28</span></div>
+            <div class="ctrl-head"><label for="thr">Threshold</label><span class="val" id="thr_v">0.80</span></div>
             <div class="ctrl-sub" style="margin-top:2px">Higher = fewer, cleaner lines</div>
-            <input type="range" id="thr" min="0.05" max="0.8" step="0.01" value="0.28">
+            <input type="range" id="thr" min="0.05" max="0.8" step="0.01" value="0.80">
           </div>
           <div class="ctrl">
             <div class="ctrl-head"><label for="thick">Thickness</label><span class="val" id="thick_v">1</span></div>
             <input type="range" id="thick" min="0" max="3" step="1" value="1">
           </div>
           <div class="ctrl">
-            <div class="ctrl-head"><label for="op">Darkness</label><span class="val" id="op_v">0.90</span></div>
-            <input type="range" id="op" min="0" max="1" step="0.05" value="0.9">
+            <div class="ctrl-head"><label for="op">Darkness</label><span class="val" id="op_v">0.85</span></div>
+            <input type="range" id="op" min="0" max="1" step="0.05" value="0.85">
           </div>
         </div>
 
@@ -426,7 +440,7 @@ let source=null, isVideo=false, videoEl=null, rafId=0;
 function loadImage(url){
   const img=new Image(); img.onload=()=>{ stopVideo(); source=img; isVideo=false;
     resize(img.naturalWidth,img.naturalHeight); uploadSource(img); renderOnce();
-    $('playpause').style.display='none';
+    $('playpause').style.display='none'; updateExportUI();
   }; img.onerror=()=>{ $('hint').textContent='Could not load that image.'; }; img.src=url;
 }
 function loadVideo(url){
@@ -435,7 +449,7 @@ function loadVideo(url){
   videoEl.addEventListener('loadeddata',()=>{ source=videoEl; isVideo=true;
     resize(videoEl.videoWidth,videoEl.videoHeight);
     $('playpause').style.display=''; $('playpause').textContent='Pause';
-    videoEl.play(); loop();
+    videoEl.play(); loop(); updateExportUI();
     $('hint').textContent='Playing your clip — stylized live';
   },{once:true});
   videoEl.addEventListener('error',()=>{ $('hint').textContent='Could not decode that video in-browser (try an MP4/H.264).'; });
@@ -567,7 +581,7 @@ $('file').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f)return
   $('hint').style.display='none';
 });
 
-const DEFAULTS={sat:2.6,con:1.35,rad:4,pass:2,lev:5,thr:0.28,thick:1,op:0.9,edges:true,ss:true};
+const DEFAULTS={sat:2.6,con:1.35,rad:6,pass:2,lev:5,thr:0.8,thick:1,op:0.85,edges:true,ss:true};
 $('reset').addEventListener('click',()=>{
   for(const k in DEFAULTS){ const el=$(k); if(el.type==='checkbox')el.checked=DEFAULTS[k]; else el.value=DEFAULTS[k]; }
   onChange();
@@ -621,6 +635,76 @@ function copy(text,msg){ navigator.clipboard.writeText(text).then(()=>toast(msg)
     ta.select(); document.execCommand('copy'); ta.remove(); toast(msg); }); }
 $('copy').addEventListener('click',()=>copy(window.__cmd,'Command copied'));
 $('copybatch').addEventListener('click',()=>copy(window.__batch,'Batch loop copied'));
+
+/* ---------------- export (download stylized output) ---------------- */
+const REC_OK = (typeof MediaRecorder!=='undefined') && !!(canvas.captureStream||canvas.mozCaptureStream);
+let rec=null, recChunks=[], recording=false;
+function triggerDownload(blob,name){
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
+function updateExportUI(){
+  const vid=isVideo;
+  $('exportPng').style.display = vid? 'none':'';
+  $('exportWebm').style.display = vid? '':'none';
+  $('stopRec').style.display='none';
+  if(vid && !REC_OK){
+    $('exportWebm').disabled=true;
+    $('exportWebm').title='This browser does not support in-browser recording — use the ffmpeg command instead.';
+  } else if(vid){
+    $('exportWebm').disabled=recording;
+    $('exportWebm').title='Record the stylized canvas for one pass and download a WebM';
+  }
+}
+$('exportPng').addEventListener('click',()=>{
+  if(!source) return;
+  renderOnce(); // make sure the current stylized frame is in the buffer
+  canvas.toBlob(b=>{ if(b) triggerDownload(b,'halftone_frame.png'); toast('Frame downloaded'); },'image/png');
+});
+function pickMime(){
+  const cands=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+  for(const c of cands){ if(MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(c)) return c; }
+  return 'video/webm';
+}
+function stopRecording(){
+  if(rec && rec.state!=='inactive'){ try{rec.stop();}catch(e){} }
+}
+let recEndedHandler=null;
+$('exportWebm').addEventListener('click',()=>{
+  if(!isVideo || !videoEl || !REC_OK || recording) return;
+  const cs = canvas.captureStream? canvas.captureStream(30) : canvas.mozCaptureStream(30);
+  // try to attach source audio
+  try{
+    const as = videoEl.captureStream? videoEl.captureStream() : (videoEl.mozCaptureStream? videoEl.mozCaptureStream():null);
+    const at = as && as.getAudioTracks()[0]; if(at) cs.addTrack(at);
+  }catch(e){}
+  const type=pickMime();
+  try{ rec=new MediaRecorder(cs,{mimeType:type}); }
+  catch(e){ try{ rec=new MediaRecorder(cs); }catch(e2){ toast('Recording not supported'); return; } }
+  recChunks=[];
+  rec.ondataavailable=e=>{ if(e.data&&e.data.size) recChunks.push(e.data); };
+  rec.onstop=()=>{
+    recording=false;
+    if(recEndedHandler){ videoEl.removeEventListener('ended',recEndedHandler); recEndedHandler=null; }
+    videoEl.loop=true;
+    $('recind').hidden=true; $('stopRec').style.display='none';
+    updateExportUI();
+    const blob=new Blob(recChunks,{type:rec.mimeType||type});
+    if(blob.size) triggerDownload(blob,'halftone_output.webm');
+    toast('WebM downloaded');
+  };
+  // single clean pass: rewind, disable loop, record until 'ended' (or Stop)
+  recording=true;
+  videoEl.loop=false; videoEl.currentTime=0;
+  recEndedHandler=()=>stopRecording();
+  videoEl.addEventListener('ended',recEndedHandler);
+  $('recind').hidden=false; $('stopRec').style.display='';
+  $('exportWebm').disabled=true;
+  videoEl.play(); $('playpause').textContent='Pause';
+  rec.start();
+});
+$('stopRec').addEventListener('click',stopRecording);
 
 /* ---------------- scripture verses (World English Bible, public domain) ---------------- */
 const VERSES=[

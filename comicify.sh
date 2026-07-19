@@ -27,28 +27,35 @@ set -euo pipefail
 INPUT_DIR="./input"        # folder of source .mp4 clips
 OUTPUT_DIR="./output"      # folder for styled clips (created if missing)
 
-STEP=75                    # LUMA posterize step. ~256/STEP = # of brightness levels
-                           #   (75 -> ~3). Bigger = fewer/flatter. Range ~24 (subtle)
+# Defaults below reproduce the "Halftone default" favorite preset (see
+# FAVORITE-PRESET.md and the Reset defaults in index.html).
+
+STEP=51                    # LUMA posterize step. ~256/STEP = # of brightness levels
+                           #   (51 -> ~5). Bigger = fewer/flatter. Range ~24 (subtle)
                            #   to 90 (extreme). Skin bands worst — judge on a face clip.
-COLOR_STEP=64              # CHROMA posterize step — flattens the actual hues into
+COLOR_STEP=51              # CHROMA posterize step — flattens the actual hues into
                            #   solid blocks (the big cel-shade lever). ~24 subtle,
                            #   64 chunky pop-art.
-FLATTEN=20                 # bilateral flatten strength (spatial). Unlike a blur, this
+FLATTEN=30                 # bilateral flatten strength (spatial). Unlike a blur, this
                            #   keeps edges CRISP while filling regions with flat color —
                            #   this is what makes it graphic instead of soft/real.
                            #   0 = off, ~10 mild, ~20 strong, ~30 poster-paint.
 FLATTEN_PASSES=2           # times to run the flatten. More = flatter blocks, harder
                            #   look. 1-3. (2 is the sweet spot; 3 starts eating detail.)
-SATURATION=2.8             # color boost (1.0 = unchanged)
-CONTRAST=1.4               # contrast boost (1.0 = unchanged)
+SATURATION=2.60            # color boost (1.0 = unchanged)
+CONTRAST=1.35              # contrast boost (1.0 = unchanged)
+
+SUPERSAMPLE=true           # render at 2x (lanczos) then scale back down at the end for
+                           #   clean, anti-aliased ink lines. Slower but crisper. Matches
+                           #   the tuner's "Clean edges (2x supersample)" toggle.
 
 EDGES=true                 # true = draw bold ink outlines; false = posterize only
-LINE_THICKEN=2             # ink-line thickness (erosion passes). 0 = thin, 1 = bold,
+LINE_THICKEN=1             # ink-line thickness (erosion passes). 0 = thin, 1 = bold,
                            #   2 = heavy comic ink, 3 = thick (can merge fine detail
                            #   like small text). THIS is the "harder lines" knob.
-EDGE_OPACITY=1.0           # ink-line darkness. 1.0 = solid black, lower = softer.
-EDGE_LOW=0.1               # edgedetect lower threshold (lower = more/finer lines)
-EDGE_HIGH=0.4              # edgedetect upper threshold (higher = only strong edges)
+EDGE_OPACITY=0.85          # ink-line darkness. 1.0 = solid black, lower = softer.
+EDGE_LOW=0.40              # edgedetect lower threshold (lower = more/finer lines)
+EDGE_HIGH=0.93             # edgedetect upper threshold (higher = only strong edges)
 
 PREVIEW_SECONDS=4          # length of the middle snippet in --preview mode
 
@@ -84,11 +91,17 @@ flatten_chain() {
   printf '%s' "$f"
 }
 
-# luma + chroma posterize.
+# luma + chroma posterize. Luma is floor-quantized; chroma is quantized around the
+# neutral point 128 (centered round) so flat greys/skin don't pick up a color cast.
 posterize_chain() {
-  printf 'lutyuv=y=(val/%s)*%s:u=(val/%s)*%s:v=(val/%s)*%s' \
+  printf "lutyuv=y='floor(val/%s)*%s':u='round((val-128)/%s)*%s+128':v='round((val-128)/%s)*%s+128'" \
     "$STEP" "$STEP" "$COLOR_STEP" "$COLOR_STEP" "$COLOR_STEP" "$COLOR_STEP"
 }
+
+# Optional 2x supersample wrappers: scale up before the graph, back down after, so
+# ink lines come out anti-aliased instead of jaggy.
+ss_up()   { [ "$SUPERSAMPLE" = "true" ] && printf 'scale=iw*2:ih*2:flags=lanczos,'; return 0; }
+ss_down() { [ "$SUPERSAMPLE" = "true" ] && printf ',scale=iw/2:ih/2:flags=lanczos'; return 0; }
 
 # edgedetect -> negate -> thicken lines. Trailing erosions set outline weight.
 edge_chain() {
@@ -108,13 +121,13 @@ build_video_args() {
   VIDEO_ARGS=()
   if [ "$EDGES" = "true" ]; then
     VIDEO_ARGS+=(-filter_complex
-      "[0:v]$(flatten_chain),split[flat1][flat2];\
+      "[0:v]$(ss_up)$(flatten_chain),split[flat1][flat2];\
 [flat1]$(posterize_chain)[base];\
 [flat2]$(edge_chain)[edges];\
-[base][edges]blend=all_mode=multiply:c0_opacity=${EDGE_OPACITY}:c1_opacity=0:c2_opacity=0[out]"
+[base][edges]blend=all_mode=multiply:c0_opacity=${EDGE_OPACITY}:c1_opacity=0:c2_opacity=0$(ss_down)[out]"
       -map "[out]" -map "0:a?")
   else
-    VIDEO_ARGS+=(-vf "$(flatten_chain),$(posterize_chain)" -map 0:v -map "0:a?")
+    VIDEO_ARGS+=(-vf "$(ss_up)$(flatten_chain),$(posterize_chain)$(ss_down)" -map 0:v -map "0:a?")
   fi
 }
 
@@ -152,7 +165,7 @@ command -v ffprobe >/dev/null || { echo "ffprobe not found on PATH" >&2; exit 1;
 
 mkdir -p "$OUTPUT_DIR"
 
-echo "Settings: luma_step=$STEP color_step=$COLOR_STEP flatten=${FLATTEN}x${FLATTEN_PASSES} sat=$SATURATION con=$CONTRAST edges=$EDGES thicken=$LINE_THICKEN opacity=$EDGE_OPACITY"
+echo "Settings: luma_step=$STEP color_step=$COLOR_STEP flatten=${FLATTEN}x${FLATTEN_PASSES} sat=$SATURATION con=$CONTRAST edges=$EDGES thicken=$LINE_THICKEN opacity=$EDGE_OPACITY supersample=$SUPERSAMPLE"
 
 
 # ------------------------------ preview mode -------------------------------

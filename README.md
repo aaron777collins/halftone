@@ -20,7 +20,21 @@ Built with plain WebGL — no frameworks, no build step, no dependencies. It's a
 4. Click **Copy** to grab the ffmpeg command (or **Copy batch** to loop over
    `input/*.mp4`).
 5. Paste it into a terminal and run it on your clips. The `comicify.sh` script and the
-   `presets/` files in this repo are the batch equivalents.
+   `presets/` files in this repo are the batch equivalents — their defaults reproduce
+   the built-in "Halftone default" look (see `FAVORITE-PRESET.md`).
+
+### Exporting from the page
+
+The tuner also has an **Export** control by the preview:
+
+- **Image / default scene loaded** → **Download frame (PNG)** saves the stylized still.
+- **Video loaded** → **Record & download (WebM)** records the stylized canvas for one
+  full pass (with source audio when the browser allows) and downloads a `.webm`; a
+  **Stop** button ends it early.
+
+WebM export is a quick in-browser copy — for final MP4 / Camtasia quality, use the
+ffmpeg command. (Recording needs a browser with `MediaRecorder` + `captureStream`; if
+unavailable the button is disabled.)
 
 ## How it works
 
