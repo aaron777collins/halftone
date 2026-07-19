@@ -30,11 +30,11 @@ OUTPUT_DIR="./output"      # folder for styled clips (created if missing)
 # Defaults below reproduce the "Halftone default" favorite preset (see
 # FAVORITE-PRESET.md and the Reset defaults in index.html).
 
-STEP=51                    # LUMA posterize step. ~256/STEP = # of brightness levels
-                           #   (51 -> ~5). Bigger = fewer/flatter. Range ~24 (subtle)
+STEP=21                    # LUMA posterize step. ~256/STEP = # of brightness levels
+                           #   (21 -> ~12). Bigger = fewer/flatter. Range ~21 (finer)
                            #   to 90 (extreme). Skin bands worst — judge on a face clip.
-COLOR_STEP=51              # CHROMA posterize step — flattens the actual hues into
-                           #   solid blocks (the big cel-shade lever). ~24 subtle,
+COLOR_STEP=21              # CHROMA posterize step — flattens the actual hues into
+                           #   solid blocks (the big cel-shade lever). ~21 finer,
                            #   64 chunky pop-art.
 FLATTEN=30                 # bilateral flatten strength (spatial). Unlike a blur, this
                            #   keeps edges CRISP while filling regions with flat color —
@@ -42,8 +42,8 @@ FLATTEN=30                 # bilateral flatten strength (spatial). Unlike a blur
                            #   0 = off, ~10 mild, ~20 strong, ~30 poster-paint.
 FLATTEN_PASSES=2           # times to run the flatten. More = flatter blocks, harder
                            #   look. 1-3. (2 is the sweet spot; 3 starts eating detail.)
-SATURATION=2.60            # color boost (1.0 = unchanged)
-CONTRAST=1.35              # contrast boost (1.0 = unchanged)
+SATURATION=1.60            # color boost (1.0 = unchanged)
+CONTRAST=1.55              # contrast boost (1.0 = unchanged)
 
 SUPERSAMPLE=true           # render at 2x (lanczos) then scale back down at the end for
                            #   clean, anti-aliased ink lines. Slower but crisper. Matches

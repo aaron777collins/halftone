@@ -237,12 +237,12 @@
         <div class="group">
           <h3>Color</h3>
           <div class="ctrl">
-            <div class="ctrl-head"><label for="sat">Saturation</label><span class="val" id="sat_v">2.60</span></div>
-            <input type="range" id="sat" min="0.5" max="3.5" step="0.05" value="2.6">
+            <div class="ctrl-head"><label for="sat">Saturation</label><span class="val" id="sat_v">1.60</span></div>
+            <input type="range" id="sat" min="0.5" max="3.5" step="0.05" value="1.6">
           </div>
           <div class="ctrl">
-            <div class="ctrl-head"><label for="con">Contrast</label><span class="val" id="con_v">1.35</span></div>
-            <input type="range" id="con" min="0.8" max="2.0" step="0.05" value="1.35">
+            <div class="ctrl-head"><label for="con">Contrast</label><span class="val" id="con_v">1.55</span></div>
+            <input type="range" id="con" min="0.8" max="2.0" step="0.05" value="1.55">
           </div>
         </div>
 
@@ -263,8 +263,8 @@
           <h3>Posterize</h3>
           <div class="ctrl-sub">Fewer levels = chunkier, more pop-art color blocks.</div>
           <div class="ctrl">
-            <div class="ctrl-head"><label for="lev">Color levels</label><span class="val" id="lev_v">5</span></div>
-            <input type="range" id="lev" min="2" max="12" step="1" value="5">
+            <div class="ctrl-head"><label for="lev">Color levels</label><span class="val" id="lev_v">12</span></div>
+            <input type="range" id="lev" min="2" max="12" step="1" value="12">
           </div>
         </div>
 
@@ -581,7 +581,7 @@ $('file').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f)return
   $('hint').style.display='none';
 });
 
-const DEFAULTS={sat:2.6,con:1.35,rad:6,pass:2,lev:5,thr:0.8,thick:1,op:0.85,edges:true,ss:true};
+const DEFAULTS={sat:1.6,con:1.55,rad:6,pass:2,lev:12,thr:0.8,thick:1,op:0.85,edges:true,ss:true};
 $('reset').addEventListener('click',()=>{
   for(const k in DEFAULTS){ const el=$(k); if(el.type==='checkbox')el.checked=DEFAULTS[k]; else el.value=DEFAULTS[k]; }
   onChange();
