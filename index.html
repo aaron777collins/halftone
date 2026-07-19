@@ -220,11 +220,11 @@
         <span class="spacer"></span>
         <span class="rec-ind" id="recind" hidden><span class="rec-dot"></span>REC</span>
         <button id="exportPng" class="primary" type="button" title="Download the stylized still as a PNG">Download frame (PNG)</button>
-        <button id="exportWebm" type="button" style="display:none" title="Record the stylized canvas for one pass and download a WebM">Record &amp; download (WebM)</button>
+        <button id="exportWebm" type="button" style="display:none" title="Record the stylized canvas for one pass and download a WebM">Record &amp; download (WebM)</button><!-- label/title updated to MP4 by JS when supported -->
         <button id="stopRec" type="button" style="display:none" title="Stop recording and download">Stop</button>
         <span class="badge" id="dims">—</span>
       </div>
-      <div class="export-note" id="exportNote">WebM export is a quick in-browser copy — for final MP4 / Camtasia quality, use the ffmpeg command.</div>
+      <div class="export-note" id="exportNote">MP4 recorded in your browser at preview resolution — for full-resolution output use the desktop right-click tool.</div>
       <div class="canvas-wrap">
         <canvas id="gl"></canvas>
       </div>
@@ -638,7 +638,28 @@ $('copybatch').addEventListener('click',()=>copy(window.__batch,'Batch loop copi
 
 /* ---------------- export (download stylized output) ---------------- */
 const REC_OK = (typeof MediaRecorder!=='undefined') && !!(canvas.captureStream||canvas.mozCaptureStream);
+// mimeType candidates, MP4 (H.264) FIRST so current Chrome records a VLC-friendly
+// file directly; WebM only as fallback.
+const MIME_CANDS=[
+  'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+  'video/mp4;codecs=avc1',
+  'video/mp4',
+  'video/webm;codecs=vp9,opus',
+  'video/webm;codecs=vp8,opus',
+  'video/webm'
+];
+function pickMime(){
+  for(const c of MIME_CANDS){
+    if(typeof MediaRecorder!=='undefined' && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) return c;
+  }
+  return 'video/webm';
+}
+// Detect MP4 recording support once, on load, to drive the button wording.
+const CHOSEN_MIME = REC_OK ? pickMime() : '';
+const MP4_OK = /mp4/i.test(CHOSEN_MIME);
+function extForMime(m){ return /mp4/i.test(m||'') ? 'mp4' : 'webm'; }
 let rec=null, recChunks=[], recording=false;
+let recEndedHandler=null, recTicker=null;
 function triggerDownload(blob,name){
   const url=URL.createObjectURL(blob); const a=document.createElement('a');
   a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
@@ -648,13 +669,16 @@ function updateExportUI(){
   const vid=isVideo;
   $('exportPng').style.display = vid? 'none':'';
   $('exportWebm').style.display = vid? '':'none';
-  $('stopRec').style.display='none';
+  $('stopRec').style.display = (vid && recording)? '':'none';
+  const fmtLabel = MP4_OK ? 'MP4' : 'WebM';
   if(vid && !REC_OK){
     $('exportWebm').disabled=true;
-    $('exportWebm').title='This browser does not support in-browser recording — use the ffmpeg command instead.';
+    $('exportWebm').textContent='Record & download ('+fmtLabel+')';
+    $('exportWebm').title='In-browser recording is not supported here — use the desktop right-click tool for MP4.';
   } else if(vid){
     $('exportWebm').disabled=recording;
-    $('exportWebm').title='Record the stylized canvas for one pass and download a WebM';
+    $('exportWebm').textContent='Record & download ('+fmtLabel+')';
+    $('exportWebm').title='Record the stylized canvas for one pass and download a '+fmtLabel;
   }
 }
 $('exportPng').addEventListener('click',()=>{
@@ -662,47 +686,52 @@ $('exportPng').addEventListener('click',()=>{
   renderOnce(); // make sure the current stylized frame is in the buffer
   canvas.toBlob(b=>{ if(b) triggerDownload(b,'halftone_frame.png'); toast('Frame downloaded'); },'image/png');
 });
-function pickMime(){
-  const cands=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
-  for(const c of cands){ if(MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(c)) return c; }
-  return 'video/webm';
-}
 function stopRecording(){
+  if(recTicker){ clearInterval(recTicker); recTicker=null; }
   if(rec && rec.state!=='inactive'){ try{rec.stop();}catch(e){} }
 }
-let recEndedHandler=null;
 $('exportWebm').addEventListener('click',()=>{
   if(!isVideo || !videoEl || !REC_OK || recording) return;
+  // The rAF loop must be running so captureStream receives live stylized frames.
+  if(!rafId) loop();
   const cs = canvas.captureStream? canvas.captureStream(30) : canvas.mozCaptureStream(30);
-  // try to attach source audio
+  // try to attach source audio; record video-only if the browser can't provide it
   try{
     const as = videoEl.captureStream? videoEl.captureStream() : (videoEl.mozCaptureStream? videoEl.mozCaptureStream():null);
-    const at = as && as.getAudioTracks()[0]; if(at) cs.addTrack(at);
-  }catch(e){}
-  const type=pickMime();
+    const at = as && as.getAudioTracks && as.getAudioTracks()[0]; if(at) cs.addTrack(at);
+  }catch(e){ /* video-only */ }
+  const type=CHOSEN_MIME || pickMime();
   try{ rec=new MediaRecorder(cs,{mimeType:type}); }
   catch(e){ try{ rec=new MediaRecorder(cs); }catch(e2){ toast('Recording not supported'); return; } }
   recChunks=[];
   rec.ondataavailable=e=>{ if(e.data&&e.data.size) recChunks.push(e.data); };
   rec.onstop=()=>{
     recording=false;
+    if(recTicker){ clearInterval(recTicker); recTicker=null; }
     if(recEndedHandler){ videoEl.removeEventListener('ended',recEndedHandler); recEndedHandler=null; }
     videoEl.loop=true;
-    $('recind').hidden=true; $('stopRec').style.display='none';
+    $('recind').hidden=true;
     updateExportUI();
-    const blob=new Blob(recChunks,{type:rec.mimeType||type});
-    if(blob.size) triggerDownload(blob,'halftone_output.webm');
-    toast('WebM downloaded');
+    const outMime = rec.mimeType || type;               // use what the recorder actually produced
+    const blob=new Blob(recChunks,{type:outMime});
+    if(blob.size) triggerDownload(blob,'halftone_output.'+extForMime(outMime));
+    toast(extForMime(outMime).toUpperCase()+' downloaded');
   };
   // single clean pass: rewind, disable loop, record until 'ended' (or Stop)
   recording=true;
   videoEl.loop=false; videoEl.currentTime=0;
   recEndedHandler=()=>stopRecording();
   videoEl.addEventListener('ended',recEndedHandler);
+  // Guard against 'ended' never firing: stop once playback reaches the end.
+  recTicker=setInterval(()=>{
+    if(!recording) return;
+    const d=videoEl.duration;
+    if(isFinite(d) && d>0 && videoEl.currentTime>=d-0.05) stopRecording();
+  },200);
   $('recind').hidden=false; $('stopRec').style.display='';
   $('exportWebm').disabled=true;
   videoEl.play(); $('playpause').textContent='Pause';
-  rec.start();
+  rec.start(100); // small timeslice → periodic chunk flush; avoids malformed single-blob output
 });
 $('stopRec').addEventListener('click',stopRecording);
 
@@ -735,5 +764,7 @@ const VERSES=[
 
 /* ---------------- boot ---------------- */
 syncLabels(); buildCmd();
+// Reflect MP4 support in the record button label once, on load.
+$('exportWebm').textContent = 'Record & download (' + (MP4_OK ? 'MP4' : 'WebM') + ')';
 if(gl) loadImage(DEFAULT_FRAME || makePlaceholder());
 </script>

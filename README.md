@@ -28,13 +28,14 @@ Built with plain WebGL — no frameworks, no build step, no dependencies. It's a
 The tuner also has an **Export** control by the preview:
 
 - **Image / default scene loaded** → **Download frame (PNG)** saves the stylized still.
-- **Video loaded** → **Record & download (WebM)** records the stylized canvas for one
-  full pass (with source audio when the browser allows) and downloads a `.webm`; a
-  **Stop** button ends it early.
+- **Video loaded** → **Record & download (MP4)** records the stylized canvas for one
+  full pass (with source audio when the browser allows). On current Chrome this records
+  H.264/MP4 directly and downloads a VLC-friendly `halftone_output.mp4`; browsers without
+  MP4 recording fall back to `.webm`. A **Stop** button ends it early.
 
-WebM export is a quick in-browser copy — for final MP4 / Camtasia quality, use the
-ffmpeg command. (Recording needs a browser with `MediaRecorder` + `captureStream`; if
-unavailable the button is disabled.)
+MP4 is recorded in your browser at preview resolution — for full-resolution output use
+the desktop right-click tool (the ffmpeg command). (Recording needs a browser with
+`MediaRecorder` + `captureStream`; if unavailable the button is disabled.)
 
 ## How it works
 
