@@ -20,8 +20,16 @@ Built with plain WebGL — no frameworks, no build step, no dependencies. It's a
 4. Click **Copy** to grab the ffmpeg command (or **Copy batch** to loop over
    `input/*.mp4`).
 5. Paste it into a terminal and run it on your clips. The `comicify.sh` script and the
-   `presets/` files in this repo are the batch equivalents — their defaults reproduce
-   the built-in "Halftone default" look (see `FAVORITE-PRESET.md`).
+   `presets/` files in this repo are the ffmpeg batch equivalents (see
+   `FAVORITE-PRESET.md`).
+
+> **Exact match vs. approximation.** `comicify.sh` builds the look from ffmpeg
+> filters, which **approximates** the tuner and comes out **flatter/cooler** — it
+> does *not* exactly match the on-screen preview. For output that matches the
+> tuner **exactly** (warm/rich look, full resolution), use the exact-match
+> renderer in the companion **`halftone-apply`** repo — single file or a whole
+> folder: `node renderer/render.js "<file-or-folder>" [--out <dir>]`, or its
+> Windows right-click (per-file and per-folder) tools.
 
 ### Exporting from the page
 

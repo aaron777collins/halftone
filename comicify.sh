@@ -7,6 +7,22 @@
 # comic look. Audio is passed through untouched; source resolution and frame
 # rate are preserved.
 #
+# ---------------------------------------------------------------------------
+# IMPORTANT — THIS IS AN FFMPEG *APPROXIMATION*, NOT AN EXACT TUNER MATCH.
+# ---------------------------------------------------------------------------
+# This script builds the look from ffmpeg filters (eq / bilateral / lutyuv /
+# edgedetect). It does NOT run the same math as the Halftone WebGL tuner, so
+# its output has FLATTER, COOLER tones and does NOT exactly match what you see
+# in the tuner preview. It remains a fine standalone ffmpeg option, but if you
+# want output that matches the tuner EXACTLY (warm/rich look), use the
+# exact-match renderer instead:
+#
+#   Single file : node halftone-apply/renderer/render.js "clip.mp4"
+#   Whole folder: node halftone-apply/renderer/render.js "C:\clips" --out "C:\out"
+#   Or the Windows right-click tools in the halftone-apply repo (per-file and
+#   per-folder "Halftone" verbs).
+# ---------------------------------------------------------------------------
+#
 # USAGE
 #   ./comicify.sh                      Batch every .mp4 in INPUT_DIR -> OUTPUT_DIR
 #   ./comicify.sh --preview            Dial-in mode: a few seconds from the middle
